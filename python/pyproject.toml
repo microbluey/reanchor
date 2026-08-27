@@ -44,6 +44,7 @@ dependencies = []
 Homepage = "https://github.com/microbluey/reanchor"
 Repository = "https://github.com/microbluey/reanchor"
 Issues = "https://github.com/microbluey/reanchor/issues"
+Changelog = "https://github.com/microbluey/reanchor/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = ["mypy>=1.13", "pytest>=8.3", "ruff>=0.8"]

@@ -1,0 +1,80 @@
+name: Release
+
+# Publishing runs from a tag, never from a laptop, so what is on the registry is
+# what is in the repository. Both packages go out together: they share a version
+# because a selector described by one must resolve in the other.
+#
+# Both registries are configured for trusted publishing (OIDC), so there are no
+# tokens in this repository's secrets. Before the first release, register this
+# workflow as a trusted publisher on npmjs.com and pypi.org.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+        working-directory: python
+      - run: uv run ruff check .
+        working-directory: python
+      - run: uv run ruff format --check .
+        working-directory: python
+      - run: uv run mypy
+        working-directory: python
+      - run: uv run pytest
+        working-directory: python
+
+      # A tag that disagrees with the manifests would publish a version nobody
+      # can trace back to a commit. Catch it before either registry sees it.
+      - name: Versions agree with the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          npm_version=$(node -p "require('./package.json').version")
+          py_version=$(grep -m1 '^version = ' python/pyproject.toml | cut -d'"' -f2)
+          echo "tag=$tag npm=$npm_version python=$py_version"
+          test "$tag" = "$npm_version" || { echo "package.json disagrees"; exit 1; }
+          test "$tag" = "$py_version" || { echo "pyproject.toml disagrees"; exit 1; }
+
+  npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm publish --provenance --access public
+
+  pypi:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+        working-directory: python
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist

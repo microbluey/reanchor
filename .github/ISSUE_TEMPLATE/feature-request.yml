@@ -1,0 +1,34 @@
+name: Feature or scope question
+description: Propose a capability, or ask whether something belongs here
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Some things are deliberately out of scope — DOM ranges, structural
+        anchors (heading paths, PDF quads, EPUB CFI), tokenizers and language
+        models. `CONTRIBUTING.md` says why. Proposing one anyway is fine; the
+        reasoning is what's interesting.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What anchoring problem is not solved today
+      description: >
+        Describe the situation, not the API you have in mind. A document that
+        changes in a way the current ladder handles badly is the strongest form
+        of this.
+    validations:
+      required: true
+
+  - type: textarea
+    id: measurable
+    attributes:
+      label: How would we know it worked
+      description: >
+        Every claim this library makes is backed by mechanically-labelled corpus
+        cases — a mutation whose effect on the span is computable. What mutation
+        class would demonstrate the improvement, and what would it do to the
+        `recall` / `wrong` / `refused` columns?
+    validations:
+      required: false

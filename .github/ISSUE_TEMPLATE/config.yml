@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question about using it
+    url: https://github.com/microbluey/reanchor/discussions
+    about: Not sure which method or threshold fits your case — ask here rather than opening a bug.

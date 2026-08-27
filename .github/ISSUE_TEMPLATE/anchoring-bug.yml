@@ -1,0 +1,66 @@
+name: Anchoring bug
+description: A quote resolved to the wrong place, or was not found when it should have been
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An anchoring bug is only actionable with the inputs. A reduced document
+        that still misbehaves is worth more than a description of the failure —
+        it lets the bug become a corpus case, which is how it stays fixed.
+
+  - type: dropdown
+    id: implementation
+    attributes:
+      label: Implementation
+      options:
+        - TypeScript (npm)
+        - Python (PyPI)
+        - Both
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: document
+    attributes:
+      label: The document
+      description: >
+        Reduce it as far as it still reproduces. If it cannot be shared, a
+        synthetic document with the same structure — repeated boilerplate,
+        the same script, the same kind of edit — is usually enough.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: selector
+    attributes:
+      label: The selector, and the options
+      description: >
+        The `exact`/`prefix`/`suffix` you passed, plus any non-default options.
+        If the selector came from `describeQuote`/`describe_quote`, the original
+        document and span it was taken from.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What came back, and what you expected
+      description: >
+        The full result including `method`, `confidence`, `distance`, and
+        `rivals` — a non-empty `rivals` usually explains a wrong match, and a
+        low `confidence` on a wrong match is the library working as intended
+        with a threshold set too low for your use.
+      render: text
+    validations:
+      required: true

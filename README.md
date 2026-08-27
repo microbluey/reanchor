@@ -22,19 +22,30 @@ Zero dependencies. No DOM, no filesystem, no network. Strings in, offsets out.
 ```ts
 import { describeQuote, resolveQuote } from "reanchor";
 
+const document =
+  "Stored offsets look right long after they stopped being right, " +
+  "because every stored offset silently rots at the same confidence " +
+  "it had when it was correct.";
+
 // When the reader highlights something, record a selector.
-const selector = describeQuote(document, 1204, 1288);
+const selector = describeQuote(document, 71, 104);
 // → { exact: "every stored offset silently rots", prefix: "", suffix: "" }
 
-// Later, against a document that has since been edited and re-typeset:
-const found = resolveQuote(editedDocument, selector);
+// Later. Someone rewrote the opening clause and swapped a word inside the
+// quote itself, so the stored offsets 71..104 now point two characters early
+// at text that no longer reads the same.
+const edited = document
+  .replace("Stored offsets look right", "A stored offset looks right")
+  .replace("silently rots", "quietly rots");
+
+const found = resolveQuote(edited, selector);
 // → {
-//     start: 1331,
-//     end: 1414,
+//     start: 73,
+//     end: 105,
 //     text: "every stored offset quietly rots",
 //     method: "approximate",
-//     confidence: 0.91,
-//     distance: 3,
+//     confidence: 0.834848,
+//     distance: 4,
 //     rivals: [],
 //   }
 
@@ -42,6 +53,11 @@ if (found === null) {
   // The passage is gone. Show the annotation as unresolved.
 }
 ```
+
+The passage moved and no longer reads the same, and both facts are reported
+rather than hidden: `approximate` says the text was edited, `distance: 4` says by
+how much, and `confidence` prices the answer. That is why a result is not just a
+span.
 
 Resolving many quotes against one document — a citation checker, a page of
 highlights — should prepare the document once:
@@ -206,6 +222,16 @@ Selectors travel between the two; raw offsets do not. JavaScript string indices
 count UTF-16 code units and Python's count code points, which agree for any
 document inside the Basic Multilingual Plane and diverge at the first emoji or
 rare CJK ideograph. Store the selector.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: a change may not trade
+correctness for recall, normalization steps must be offset-attributable, the two
+implementations share one corpus, and there are no runtime dependencies.
+
+Bug reports about a wrong match are the most useful thing you can send, and the
+hardest to guess at — a reduced document that still misbehaves becomes a corpus
+case, which is how it stays fixed.
 
 ## License
 

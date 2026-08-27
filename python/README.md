@@ -23,12 +23,24 @@ typed, `py.typed` shipped.
 ```python
 from reanchor import describe_quote, resolve_quote
 
+document = (
+    "Stored offsets look right long after they stopped being right, "
+    "because every stored offset silently rots at the same confidence "
+    "it had when it was correct."
+)
+
 # When the reader highlights something, record a selector.
 selector = describe_quote(document, 71, 104)
 # → TextQuoteSelector(exact='every stored offset silently rots', prefix='', suffix='')
 
-# Later, against a document that has since been edited and re-typeset:
-found = resolve_quote(edited_document, selector)
+# Later. Someone rewrote the opening clause and swapped a word inside the
+# quote itself, so the stored offsets 71..104 now point two characters early
+# at text that no longer reads the same.
+edited = document.replace(
+    "Stored offsets look right", "A stored offset looks right"
+).replace("silently rots", "quietly rots")
+
+found = resolve_quote(edited, selector)
 # → ResolvedQuote(
 #       start=73,
 #       end=105,
@@ -42,6 +54,11 @@ found = resolve_quote(edited_document, selector)
 if found is None:
     ...  # The passage is gone. Show the annotation as unresolved.
 ```
+
+The passage moved and no longer reads the same, and both facts are reported
+rather than hidden: `approximate` says the text was edited, `distance=4` says by
+how much, and `confidence` prices the answer. That is why a result is not just a
+span.
 
 Resolving many quotes against one document — a citation checker, a page of
 highlights — should prepare the document once:
