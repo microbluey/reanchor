@@ -12,8 +12,8 @@ jobs:
       matrix:
         node: [18, 20, 22]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci
@@ -30,8 +30,8 @@ jobs:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --locked --python ${{ matrix.python }}
