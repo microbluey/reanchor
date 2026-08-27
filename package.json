@@ -1,0 +1,60 @@
+{
+  "name": "reanchor",
+  "version": "0.1.0",
+  "description": "Find a quote again after the document changed. Robust text anchoring with offset-preserving normalization and approximate matching.",
+  "license": "MIT",
+  "author": "microbluey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/microbluey/reanchor.git"
+  },
+  "homepage": "https://github.com/microbluey/reanchor#readme",
+  "bugs": {
+    "url": "https://github.com/microbluey/reanchor/issues"
+  },
+  "keywords": [
+    "annotation",
+    "text-anchoring",
+    "textquoteselector",
+    "web-annotation",
+    "citation",
+    "fuzzy-search",
+    "approximate-string-matching",
+    "rag",
+    "grounding",
+    "highlight"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "tsx bench/resolve.bench.ts",
+    "check": "npm run typecheck && npm run test",
+    "prepublishOnly": "npm run check && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
