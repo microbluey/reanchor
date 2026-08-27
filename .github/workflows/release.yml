@@ -70,10 +70,20 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - run: npm ci
-      # No --provenance: trusted publishing attaches provenance itself when the
-      # repository and package are both public, and passing the flag on top is
-      # redundant rather than additive.
-      - run: npm publish --access public
+      # A release where one registry succeeded and the other failed should be
+      # fixable by re-running it, so a version already on the registry is a
+      # no-op rather than a failure. This also covers 0.1.0, which npm required
+      # to be published manually before it would accept a trusted publisher.
+      - name: Publish unless already there
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "reanchor@$version" version >/dev/null 2>&1; then
+            echo "reanchor@$version is already on npm; nothing to do."
+            exit 0
+          fi
+          # No --provenance: trusted publishing attaches provenance itself when
+          # the repository and package are both public.
+          npm publish --access public
 
   pypi:
     needs: verify
@@ -89,3 +99,6 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: python/dist
+          # Same reasoning as the npm job: re-running a partially-failed release
+          # should be safe.
+          skip-existing: true
