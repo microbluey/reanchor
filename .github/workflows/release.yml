@@ -4,9 +4,14 @@ name: Release
 # what is in the repository. Both packages go out together: they share a version
 # because a selector described by one must resolve in the other.
 #
-# Both registries are configured for trusted publishing (OIDC), so there are no
-# tokens in this repository's secrets. Before the first release, register this
-# workflow as a trusted publisher on npmjs.com and pypi.org.
+# Both registries publish via trusted publishing (OIDC), so there are no tokens
+# in this repository's secrets.
+#
+# The two registries bootstrap differently, which matters exactly once. PyPI
+# accepts a *pending* publisher for a project that does not exist yet, so its
+# first release can come from here. npm's trusted-publisher settings live under
+# a package that must already exist, so `reanchor@0.1.0` was published once from
+# a laptop to create it; every release after that is this workflow.
 
 on:
   push:
@@ -59,10 +64,16 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          # Trusted publishing needs npm >= 11.5.1 on Node >= 22.14, which the
+          # Node 22 the runner ships is not guaranteed to satisfy.
+          node-version: 22.14
           registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
       - run: npm ci
-      - run: npm publish --provenance --access public
+      # No --provenance: trusted publishing attaches provenance itself when the
+      # repository and package are both public, and passing the flag on top is
+      # redundant rather than additive.
+      - run: npm publish --access public
 
   pypi:
     needs: verify
