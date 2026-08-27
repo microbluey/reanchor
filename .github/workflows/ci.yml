@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  check:
+  node:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -20,3 +20,27 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    strategy:
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python ${{ matrix.python }}
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+      # The corpus is the contract between the two implementations: same cases,
+      # same ladder, so the tables mean the same thing. Building it here catches
+      # a corpus that no longer builds, which the accuracy gate cannot report
+      # because it would fail at import.
+      - run: uv run python -m bench.resolve

@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reanchor"
+version = "0.1.0"
+description = "Find a quote again after the document changed. Robust text anchoring with offset-preserving normalization and approximate matching."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "microbluey" }]
+keywords = [
+  "annotation",
+  "text-anchoring",
+  "textquoteselector",
+  "web-annotation",
+  "citation",
+  "fuzzy-search",
+  "approximate-string-matching",
+  "rag",
+  "grounding",
+  "highlight",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Text Processing :: Linguistic",
+  "Typing :: Typed",
+]
+# No runtime dependencies, deliberately: this library is a leaf that other
+# packages depend on, and a leaf with dependencies is a leaf with conflicts.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/microbluey/reanchor"
+Repository = "https://github.com/microbluey/reanchor"
+Issues = "https://github.com/microbluey/reanchor/issues"
+
+[dependency-groups]
+dev = ["mypy>=1.13", "pytest>=8.3", "ruff>=0.8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reanchor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# `bench` is not shipped in the wheel but the corpus gate imports it, so the
+# project root has to be importable during tests.
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests", "bench"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+# `reanchor` is installed into the environment, so without this ruff would sort
+# it as third-party in the bench and test modules while treating `bench` as
+# first-party -- two halves of this project on opposite sides of a blank line.
+known-first-party = ["bench", "reanchor"]
+
+[tool.ruff.lint.per-file-ignores]
+# RUF001 flags characters that could be confused with ASCII. Those characters
+# are the subject matter here: the fixtures exist to prove that full-width
+# Latin, typographic quotes, and CJK punctuation fold correctly, so an
+# "ambiguous character" is the input, not a typo.
+"bench/documents.py" = ["RUF001"]
+"tests/test_normalize.py" = ["RUF001"]
+
+[tool.mypy]
+files = ["src", "tests", "bench"]
+python_version = "3.10"
+strict = true
+warn_unreachable = true

@@ -187,6 +187,26 @@ vocabulary. `reanchor` does not depend on the rest of that model, and does not
 touch the DOM — if you need DOM ranges, resolve against `textContent` and map
 back yourself.
 
+## Python
+
+The same library, same algorithm, lives in [`python/`](python/) and on PyPI:
+
+```
+pip install reanchor
+```
+
+It is not a binding — it is a port, held to the same corpus. The 237 mutated
+cases are verified byte-identical between the two implementations, and the
+accuracy columns of the two benchmark tables match case for case; only the
+timing column differs. Anchoring tends to straddle a language boundary, with the
+highlight recorded in a browser and the citation checked in a Python pipeline, so
+both halves need to agree about where a quote is.
+
+Selectors travel between the two; raw offsets do not. JavaScript string indices
+count UTF-16 code units and Python's count code points, which agree for any
+document inside the Basic Multilingual Plane and diverge at the first emoji or
+rare CJK ideograph. Store the selector.
+
 ## License
 
 MIT
