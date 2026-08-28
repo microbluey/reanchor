@@ -101,3 +101,45 @@ that distinguish them from the rungs above and below.
 Present tense, and say why rather than what — the diff already says what. If a
 change moves a number in the benchmark table, put the before and after in the
 message.
+
+## Merging
+
+Everything lands on `main` through a pull request, including maintainer changes
+to a repository with one maintainer. `main` is what people clone and what
+release tags are cut from, so it should never be in the state a push creates:
+committed, not yet tested. A pull request holds the change until CI has an
+opinion — eight jobs, Node 18/20/22 and Python 3.10–3.14 — and those checks are
+required.
+
+Review approval is not required, because a rule that a single maintainer has to
+bypass on every merge teaches everyone that bypassing is normal. The checks are
+the part that actually refuses.
+
+Squash merges and linear history: one commit on `main` per change, so `git log`
+reads as a list of decisions and a bisect lands on something self-contained.
+
+Administrators can bypass, which is deliberate. When a published artifact is
+broken, the fix should not wait on a matrix.
+
+## Releasing
+
+**At most one release a day.** Not to keep the version number tidy — to buy
+soak time. Most bad releases (a missing file in `files`, a wrong entry point, a
+resolution regression) surface within hours, and declining to publish again
+today is a free few hours of `main` being used before the next tag is cut.
+
+The one exception is a release that fixes the previous one. A broken artifact
+should go out in ten minutes, not tomorrow.
+
+Two things that are not a second release:
+
+- **Re-running a partly-failed release.** Both publish jobs are idempotent, so a
+  tag whose npm job went green and whose PyPI job did not is re-run as the same
+  tag. Nothing new is published to the registry that already has it.
+- **A GitHub release created for an existing tag.** The tag push publishes; the
+  release notes are separate and can be written later.
+
+Releases are `git tag vX.Y.Z && git push --tags`. The workflow checks the tag
+against both manifests before either registry sees it, so a tag that disagrees
+with `package.json` or `pyproject.toml` fails rather than publishing an
+untraceable version.
