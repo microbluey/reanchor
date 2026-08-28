@@ -12,7 +12,7 @@ that moves a passage from found to refused — or from one location to another �
 is a breaking change even when no type changes. Such changes will name the
 benchmark columns they move.
 
-## [Unreleased]
+## [0.2.0] — 2026-08-28
 
 A resolution change: quotes whose original wording survives verbatim elsewhere
 in an edited document now resolve to the edited original rather than to the
@@ -102,6 +102,6 @@ Measured at release: 99.1% recall, 97.7% exact spans, 0.5% mislocated, 95.8% of
 deleted passages correctly refused — identical in both implementations, over a
 corpus verified byte-identical between them.
 
-[Unreleased]: https://github.com/microbluey/reanchor/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/microbluey/reanchor/releases/tag/v0.2.0
 [0.1.1]: https://github.com/microbluey/reanchor/releases/tag/v0.1.1
 [0.1.0]: https://github.com/microbluey/reanchor/releases/tag/v0.1.0
