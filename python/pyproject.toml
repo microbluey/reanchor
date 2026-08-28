@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reanchor"
-version = "0.2.0"
+version = "0.3.0"
 description = "Find a quote again after the document changed. Robust text anchoring with offset-preserving normalization and approximate matching."
 readme = "README.md"
 license = "MIT"
