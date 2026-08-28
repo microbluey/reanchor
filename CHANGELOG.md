@@ -42,6 +42,16 @@ benchmark columns they move.
   proximity is a plausible signal, but it would have to earn its place against
   the benchmark rather than be honoured silently because the parameter was
   passed.
+- `npm run bench:compare`, which runs the same 256 corpus cases through
+  `dom-anchor-text-quote` as well and prints both, per mutation class. The
+  README quotes the result. Each implementation records its own selector,
+  because pairing this resolver with the other library's 32-character context
+  window would compare halves of two designs; and the incumbent is reported both
+  as imported and given the offset a caller would have recorded at capture time,
+  because it searches outward from a position and withholding that measures it
+  doing something nobody asks of it.
+
+  Its `refused` column beats ours, 100.0% to 95.8%, and the table says so.
 
 ## [0.2.0] — 2026-08-28
 

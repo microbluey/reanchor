@@ -147,6 +147,13 @@ are worth knowing:
   its place against the benchmark rather than be honoured silently because the
   parameter was passed.
 - **Types ship with the package.** No hand-written `.d.ts` needed.
+- **No runtime dependencies**, against `diff-match-patch` and
+  `dom-anchor-text-position`.
+
+The accuracy difference is measured rather than asserted: [the same 256
+benchmark cases through both libraries](#against-dom-anchor-text-quote), where
+the notable rows are exact spans on re-typeset text and repeated passages told
+apart by context — and one row this library loses.
 
 Prefer `resolveRange` over `toRange` in new code: a bare range cannot tell you
 whether it was found character for character or reconstructed from an edited
@@ -248,6 +255,71 @@ elsewhere, so the exact text exists — just not where the annotation belongs.
 The one unrefused `delete-span` case is a legal document whose clauses repeat
 boilerplate almost verbatim; the deleted clause's near-twin is a defensible
 match by any threshold that admits real edits.
+
+### Against `dom-anchor-text-quote`
+
+The same 256 cases, through the library most callers already have. Both sides
+record their own selector and resolve it — comparing this resolver against the
+incumbent's 32-character context window would be comparing halves of two
+different designs. `npm run bench:compare` reproduces this.
+
+The incumbent searches outward from a position, so it appears twice: once as
+imported, and once given the offset recorded at capture time, stale by whatever
+the edit shifted. That hint is what a real caller has, and it is the row to
+read.
+
+```
+                             recall   exact  overlap   wrong  refused
+dom-anchor-text-quote         97.8%   82.3%    8.6%    7.0%   100.0%
+  + a stale position hint     97.8%   88.4%    8.6%    0.9%   100.0%
+reanchor                      99.1%   98.3%    0.9%    0.0%    95.8%
+```
+
+Where the two differ, by mutation class — `exact` and `wrong`, hint given:
+
+| n | mutation | dom-anchor | reanchor |
+| --- | --- | --- | --- |
+| 24 | `hyphenate-line-break` | 70.8% exact | 100% exact |
+| 17 | `copy-edit-inside-span` | 76.5% exact | 100% exact |
+| 24 | `compound-retypeset` | 75.0% exact | 100% exact |
+| 22 | `heavy-rewrite` | 72.7% exact, 77.3% recall | 81.8% exact, 90.9% recall |
+| 19 | `decoy-survives-edit` | 78.9% exact, **10.5% wrong** | 100% exact, 0% wrong |
+| 24 | `delete-span` | **100% refused** | 95.8% refused |
+
+The other six classes — offsets shifted, whitespace reflowed, punctuation
+smartened, the passage moved, the document duplicated, OCR noise — are both 100%
+exact with the hint, so they are not in the table. Three things in it are worth
+more than the totals:
+
+- **The exact-span gap is one mechanism, not five.** The bitap has a hard
+  32-character pattern limit, so a longer quote is cut into 32-character slices
+  and the span is the union of where each slice landed. Slices whose text was
+  touched — by the hyphen, by the copy-edit, by re-typesetting — go missing, and
+  the union comes back short. `overlap` rather than `wrong`: the right passage,
+  the wrong boundaries. Whether that matters depends on what you do with the
+  span. It is invisible if you only ever call `.toString()`, and it is a
+  highlight ending mid-word if you paint it.
+- **Without a hint, `duplicate-document` goes 58.3% wrong.** Searching outward
+  from the middle of the document finds the nearer copy of a repeated passage,
+  which is the wrong one about half the time. The stale hint fixes all 14 of
+  those cases — the information was there, the ranking is just positional rather
+  than contextual. `decoy-survives-edit` is the case no hint can fix: the quoted
+  passage was revised in place while a verbatim copy of the old wording survived
+  elsewhere, so proximity and exactness disagree — and with the hint sitting
+  exactly on the truth, the bitap still takes the character-perfect copy 89
+  characters away. Only context tells the two apart.
+- **We lose `refused`.** Its 32-character slices must all match, so a deleted
+  passage more often fails outright — which is the right answer. Our one miss is
+  the near-twin clause described above, returned at confidence 0.635. Refusing
+  is the property this library sells, so losing a row of it is the honest cost
+  of admitting real edits, and it belongs in the table.
+
+The caveat that matters: **this is our corpus.** Mechanically labelled, seeded,
+reproducible by anyone who clones the repository — but the twelve mutation
+classes were chosen here, and they are the classes this library was built to
+survive. It is evidence about a specific set of failure modes, not a general
+ranking. If a class is missing that your documents actually do to you, that is a
+bug report worth filing, and it becomes a row in this table.
 
 ## API
 

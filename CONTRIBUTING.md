@@ -14,6 +14,7 @@ bindings, and both must stay green.
 npm install
 npm run check          # typecheck + test
 npm run bench
+npm run bench:compare  # the same corpus through dom-anchor-text-quote too
 
 # Python, in python/
 cd python
@@ -62,6 +63,16 @@ reference a `Node` or a `Range`, and it ships as a separate entry point
 assumptions. Nothing in `src/` may import it. Its tests run under jsdom via a
 `@vitest-environment` pragma rather than a global environment setting, so the
 rest of the suite keeps proving the core needs no DOM.
+
+**A comparison prints every column, including the ones we lose.** `npm run
+bench:compare` reports this library beside `dom-anchor-text-quote`, and the
+README quotes it. Two things keep it evidence rather than marketing: each
+implementation records its own selector, because pairing our resolver with the
+other library's describe step would be comparing halves of two designs; and the
+incumbent is also given a position hint, because it searches outward from one
+and withholding that measures it doing something nobody asks of it. Its
+`refused` row beats ours. Do not drop a row, and do not drop the note that the
+corpus is ours — a table that only shows wins is not measurement.
 
 ## Reporting an anchoring bug
 

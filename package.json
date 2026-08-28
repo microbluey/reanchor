@@ -53,11 +53,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "tsx bench/resolve.bench.ts",
+    "bench:compare": "tsx bench/compare.ts",
     "check": "npm run typecheck && npm run test",
     "prepublishOnly": "npm run check && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "dom-anchor-text-quote": "^4.0.2",
     "jsdom": "^26.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

@@ -20,6 +20,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+      # The README quotes this comparison, so a harness that no longer runs
+      # would leave a published table nobody can reproduce. It asserts nothing;
+      # the accuracy floors live in the test suite.
+      - run: npm run bench:compare
 
   python:
     runs-on: ubuntu-latest
