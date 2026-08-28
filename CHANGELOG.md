@@ -12,7 +12,13 @@ that moves a passage from found to refused — or from one location to another �
 is a breaking change even when no type changes. Such changes will name the
 benchmark columns they move.
 
-## [Unreleased]
+## [0.3.0] — 2026-08-28
+
+A second entry point, `reanchor/dom`, for callers who have a page rather than a
+string. Nothing about resolution changed: every benchmark column is where 0.2.0
+left it — 99.1% recall, 98.3% exact spans, 0.0% mislocated, 95.8% refused — and
+the core still imports no DOM types. Selectors and offsets from 0.2.0 resolve
+unchanged.
 
 ### Added
 
@@ -143,6 +149,7 @@ Measured at release: 99.1% recall, 97.7% exact spans, 0.5% mislocated, 95.8% of
 deleted passages correctly refused — identical in both implementations, over a
 corpus verified byte-identical between them.
 
+[0.3.0]: https://github.com/microbluey/reanchor/releases/tag/v0.3.0
 [0.2.0]: https://github.com/microbluey/reanchor/releases/tag/v0.2.0
 [0.1.1]: https://github.com/microbluey/reanchor/releases/tag/v0.1.1
 [0.1.0]: https://github.com/microbluey/reanchor/releases/tag/v0.1.0
