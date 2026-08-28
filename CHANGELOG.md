@@ -12,6 +12,37 @@ that moves a passage from found to refused — or from one location to another �
 is a breaking change even when no type changes. Such changes will name the
 benchmark columns they move.
 
+## [Unreleased]
+
+### Added
+
+- `reanchor/dom`, a DOM adapter, as a second entry point. `describeRange` /
+  `resolveRange` / `resolveRanges` record and resolve selectors against a live
+  root, returning the usual `ResolvedQuote` plus a `Range`; `mapTextNodes`
+  exposes the flattened text and per-node offsets for callers resolving many
+  selectors against one page. Offsets agree character for character with
+  `root.textContent`, and an `include` predicate can exclude text that is text
+  to the DOM but not to a reader.
+
+  The core stays as it was — strings in, offsets out, no DOM types — because
+  that is what lets it run in a worker and be ported to Python. But every
+  caller who has a page rather than a string was writing the flatten-and-map
+  layer themselves, which is mechanical, easy to get subtly wrong, and reason
+  enough not to adopt anything.
+
+  `fromRange`, `toRange`, `fromTextPosition`, and `toTextPosition` are exported
+  with `dom-anchor-text-quote`'s signatures, so migrating from it is a changed
+  import. Selectors written by either library resolve through the other, so a
+  migration can be partial. Two deliberate differences: context is grown until
+  the quote is unique rather than fixed at 32 characters, and a range ends
+  inside the node holding its last character rather than at offset 0 of the
+  following node — both stringify the same, but the latter lifts the range's
+  common ancestor to the parent element and makes `surroundContents` throw on
+  any quote ending at a node boundary. `options.hint` is accepted and ignored:
+  proximity is a plausible signal, but it would have to earn its place against
+  the benchmark rather than be honoured silently because the parameter was
+  passed.
+
 ## [0.2.0] — 2026-08-28
 
 A resolution change: quotes whose original wording survives verbatim elsewhere

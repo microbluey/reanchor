@@ -15,7 +15,9 @@ passage is gone, it says so instead of guessing.
 npm i reanchor
 ```
 
-Zero dependencies. No DOM, no filesystem, no network. Strings in, offsets out.
+Zero dependencies. Strings in, offsets out. The core touches no DOM, no
+filesystem, and no network; `reanchor/dom` is a separate entry point for callers
+who have a page rather than a string.
 
 ## Use
 
@@ -72,6 +74,84 @@ import { prepareDocument, resolveQuote } from "reanchor";
 const prepared = prepareDocument(document);
 const results = selectors.map((selector) => resolveQuote(prepared, selector));
 ```
+
+## In a browser
+
+An annotation tool holds a page, not a string, and wants a `Range` it can
+highlight. `reanchor/dom` flattens a root's text nodes into one stream, resolves
+against that, and maps the answer back to a range:
+
+```ts
+import { describeRange, resolveRange } from "reanchor/dom";
+
+// When the reader selects something.
+const selector = describeRange(document.body, window.getSelection()!.getRangeAt(0));
+
+// Later, on a page that has since been edited.
+const found = resolveRange(document.body, selector);
+if (found === null) {
+  showAsUnresolved();
+} else if (found.confidence < 0.8) {
+  showAsApproximate(found.range);   // found, but the passage was edited
+} else {
+  found.range.surroundContents(document.createElement("mark"));
+}
+```
+
+`resolveRange` returns everything `resolveQuote` does, plus the `range` — so a
+caller can still refuse to highlight, which is the whole point of carrying a
+`method` and a `confidence` around.
+
+Walking the DOM is usually the expensive half, so resolve many selectors at once
+with `resolveRanges(root, selectors)`, or hold a `mapTextNodes(root)` and pass it
+where a root is expected.
+
+Offsets agree character for character with `root.textContent`, which keeps
+positions recorded by other libraries valid. Pass `include` to exclude text that
+is text to the DOM but not to a reader:
+
+```ts
+const include = (node: Text) => !node.parentElement?.closest("script, style");
+resolveRange(root, selector, { include });
+```
+
+A selector recorded under one `include` must be resolved under the same one —
+they describe different documents otherwise.
+
+### Migrating from `dom-anchor-text-quote`
+
+`reanchor/dom` exports `fromRange`, `toRange`, `fromTextPosition`, and
+`toTextPosition` with the same signatures, so the change is the import:
+
+```diff
+- import { fromRange, toRange } from "dom-anchor-text-quote";
++ import { fromRange, toRange } from "reanchor/dom";
+```
+
+Selectors already stored by that library keep resolving, and selectors written
+by this one resolve through it, so a migration can be partial. Four differences
+are worth knowing:
+
+- **Context is grown, not fixed at 32 characters.** `fromRange` extends context
+  until the quote is unique in the document, which is what lets repeated
+  passages be told apart later. Selectors get longer.
+- **A range ends inside the node holding its last character**, rather than at
+  offset 0 of the following node. Both stringify identically, but the latter
+  lifts the range's common ancestor to the parent element and
+  `surroundContents` then throws — so highlighting fails on any quote ending at
+  a node boundary.
+- **`options.hint` is accepted and ignored.** That library searches outward from
+  a position hint, so the hint decides which copy of a repeated passage it
+  finds. This one ranks copies by context agreement and reports the rest as
+  `rivals`. Proximity is a reasonable second signal, but it would have to earn
+  its place against the benchmark rather than be honoured silently because the
+  parameter was passed.
+- **Types ship with the package.** No hand-written `.d.ts` needed.
+
+Prefer `resolveRange` over `toRange` in new code: a bare range cannot tell you
+whether it was found character for character or reconstructed from an edited
+passage, and a caller that renders both identically is a caller that shows wrong
+citations as verified.
 
 ## How confident is confident
 
@@ -210,14 +290,31 @@ The search layer. `findApproximate` is Sellers' free-end-gap Levenshtein
 alignment behind a k-gram diagonal filter, so cost scales with the number of
 plausible occurrences rather than document length.
 
+### `reanchor/dom`
+
+A separate entry point; importing `reanchor` pulls in neither DOM types nor DOM
+assumptions.
+
+| Export | |
+| --- | --- |
+| `describeRange(root, range, options?)` | Record a selector for a range. |
+| `resolveRange(root, selector, options?)` | Resolve to `DomResolvedQuote \| null` — a `ResolvedQuote` plus `range`. |
+| `resolveRanges(root, selectors, options?)` | The same for many selectors, walking the DOM once. |
+| `mapTextNodes(root, options?)` | The flattened text and per-node offsets, reusable in place of `root`. |
+| `fromRange` / `toRange` / `fromTextPosition` / `toTextPosition` | The `dom-anchor-text-quote` surface. |
+
+`root` is any `Node`; a text node works as its own root. Options are
+`ResolveOptions` plus `include`, a predicate over text nodes deciding which ones
+are part of the document.
+
 ## Standards
 
 The selector shape matches the W3C Web Annotation Data Model's
 [TextQuoteSelector](https://www.w3.org/TR/annotation-model/#text-quote-selector),
 so selectors are interoperable with annotation tooling that speaks the same
-vocabulary. `reanchor` does not depend on the rest of that model, and does not
-touch the DOM — if you need DOM ranges, resolve against `textContent` and map
-back yourself.
+vocabulary. `reanchor` does not depend on the rest of that model. The core does
+not touch the DOM; [`reanchor/dom`](#in-a-browser) does, in its own entry point,
+and is source-compatible with `dom-anchor-text-quote`.
 
 ## Python
 
@@ -232,7 +329,8 @@ cases are verified byte-identical between the two implementations, and the
 accuracy columns of the two benchmark tables match case for case; only the
 timing column differs. Anchoring tends to straddle a language boundary, with the
 highlight recorded in a browser and the citation checked in a Python pipeline, so
-both halves need to agree about where a quote is.
+both halves need to agree about where a quote is. The port covers the core; the
+DOM adapter has no Python counterpart, there being no DOM.
 
 Selectors travel between the two; raw offsets do not. JavaScript string indices
 count UTF-16 code units and Python's count code points, which agree for any

@@ -56,6 +56,13 @@ diff.
 on, and a leaf with dependencies is a leaf with version conflicts. Dev
 dependencies are fine.
 
+**The DOM lives in one module.** `src/dom.ts` is the only file that may
+reference a `Node` or a `Range`, and it ships as a separate entry point
+(`reanchor/dom`) so that importing `reanchor` pulls in neither DOM types nor DOM
+assumptions. Nothing in `src/` may import it. Its tests run under jsdom via a
+`@vitest-environment` pragma rather than a global environment setting, so the
+rest of the suite keeps proving the core needs no DOM.
+
 ## Reporting an anchoring bug
 
 An anchoring bug is only actionable with the inputs. Please include the document
@@ -68,9 +75,6 @@ hardest to guess at — the reduced document is doing most of the work.
 
 ## Things deliberately out of scope
 
-- **DOM ranges.** Resolve against `textContent` and map back yourself. Keeping
-  the DOM out is what lets this run in a worker, in Node, and in a Python
-  pipeline.
 - **Structural anchors** (heading paths, PDF quads, EPUB CFI). Reasonable
   things to want; a different library, or at least a different module with its
   own corpus.

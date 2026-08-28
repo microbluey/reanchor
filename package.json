@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./dom": {
+      "types": "./dist/dom.d.ts",
+      "default": "./dist/dom.js"
     }
   },
   "main": "./dist/index.js",
@@ -54,6 +58,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "jsdom": "^26.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
