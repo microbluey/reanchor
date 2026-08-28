@@ -165,8 +165,12 @@ _METHOD_CONFIDENCE: Final[dict[MatchMethod, float]] = {
     "approximate": 0.95,
 }
 
-#: Applied when a rung matched more than one location.
+#: Applied to a candidate its own rung could not single out -- see
+#: :func:`_penalize_ambiguous`.
 _AMBIGUITY_PENALTY: Final = 0.8
+
+#: Confidences within this distance count as tied, so neither wins on rounding.
+_TIE_EPSILON: Final = 1e-9
 
 #: Floor of the context factor: a match whose recorded context is entirely
 #: absent from the document keeps this fraction of its confidence.
@@ -210,27 +214,103 @@ def resolve_quote(
 
     candidates: list[_Candidate] = []
     for rung in range(limit + 1):
-        candidates = _attempt(
-            _METHOD_ORDER[rung], prepared, selector, prefix, suffix, options
+        candidates.extend(
+            _penalize_ambiguous(
+                _attempt(
+                    _METHOD_ORDER[rung], prepared, selector, prefix, suffix, options
+                )
+            )
         )
-        if candidates:
+        if candidates and not _can_be_beaten(candidates, rung, limit):
             break
     if not candidates:
         return None
 
-    candidates.sort(key=lambda candidate: (-candidate.confidence, candidate.start))
-    best = candidates[0]
+    # One location can be reached by several rungs -- the exact rung and the
+    # normalized rung find the same span whenever normalization changed nothing
+    # relevant. Keep each location once, at its best score, so that a span cannot
+    # appear as a rival to itself.
+    by_location: dict[tuple[int, int], _Candidate] = {}
+    for candidate in candidates:
+        key = (candidate.start, candidate.end)
+        seen = by_location.get(key)
+        if seen is None or candidate.confidence > seen.confidence:
+            by_location[key] = candidate
+    distinct = list(by_location.values())
+
+    distinct.sort(key=lambda candidate: (-candidate.confidence, candidate.start))
+    best = distinct[0]
     if best.confidence < options.min_confidence:
         return None
 
     rivals = tuple(
         _materialize(candidate, prepared.text)
-        for candidate in candidates[1:]
+        for candidate in distinct[1:]
         if candidate.confidence >= options.min_confidence
         and candidate.confidence >= best.confidence - 0.05
     )[: options.max_rivals]
 
     return replace(_materialize(best, prepared.text), rivals=rivals)
+
+
+def _can_be_beaten(candidates: Sequence[_Candidate], rung: int, limit: int) -> bool:
+    """Whether a lower rung could still produce a better answer than these.
+
+    The ladder is ordered by trustworthiness, so the obvious implementation stops
+    at the first rung that yields anything. That is wrong when the quote survives
+    verbatim somewhere it does not belong: a decoy found by the exact rung whose
+    surroundings bear no resemblance to the recorded context scores *below* what
+    the approximate rung can award the copy-edited original, whose surroundings
+    still match. Stopping early means those two candidates are never compared.
+
+    So descend while the best score so far is under the ceiling a lower rung
+    could reach -- its base confidence, since similarity, context agreement and
+    the ambiguity penalty can only reduce it. A match with fully agreeing context
+    scores its rung's base confidence, which is at or above every lower rung's
+    ceiling, so the unambiguous case still stops at the first rung and costs
+    nothing.
+    """
+    ceiling = max(
+        (
+            _METHOD_CONFIDENCE[_METHOD_ORDER[next_]]
+            for next_ in range(rung + 1, limit + 1)
+        ),
+        default=0.0,
+    )
+    return max(candidate.confidence for candidate in candidates) < ceiling
+
+
+def _penalize_ambiguous(candidates: list[_Candidate]) -> list[_Candidate]:
+    """Discount candidates that their own rung could not single out.
+
+    Counting hits is the tempting test, and it is the wrong one: a rung that
+    found three locations but whose recorded context matches exactly one of them
+    *has* told them apart, and penalizing the survivor for the company it kept
+    lets a worse rung's unambiguous-but-wrong answer outrank it. What ambiguity
+    should cost is being indistinguishable, so the penalty falls on candidates
+    tied at the top of their rung -- where the resolver is genuinely choosing by
+    coin flip -- and a candidate that context put in front on its own keeps its
+    score.
+
+    A single hit is trivially in front and so passes through unchanged, which is
+    why this is not a behaviour change for the common case.
+    """
+    if len(candidates) <= 1:
+        return candidates
+    best = max(candidate.confidence for candidate in candidates)
+    tied = [
+        candidate
+        for candidate in candidates
+        if candidate.confidence >= best - _TIE_EPSILON
+    ]
+    if len(tied) <= 1:
+        return candidates
+    return [
+        replace(candidate, confidence=candidate.confidence * _AMBIGUITY_PENALTY)
+        if candidate.confidence >= best - _TIE_EPSILON
+        else candidate
+        for candidate in candidates
+    ]
 
 
 def resolve_quotes(
@@ -295,7 +375,6 @@ def _attempt(
                         prefix,
                         suffix,
                     ),
-                    len(hits),
                 ),
                 distance=0,
             )
@@ -343,7 +422,7 @@ def _attempt(
                     start=span.start,
                     end=span.end,
                     method=method,
-                    confidence=_score(_METHOD_CONFIDENCE[method], agreement, len(hits)),
+                    confidence=_score(_METHOD_CONFIDENCE[method], agreement),
                     distance=0,
                 )
             )
@@ -372,7 +451,6 @@ def _attempt(
                 confidence=_score(
                     _METHOD_CONFIDENCE["approximate"] * similarity,
                     agreement,
-                    len(matches),
                 ),
                 distance=match.distance,
             )
@@ -380,18 +458,17 @@ def _attempt(
     return candidates
 
 
-def _score(base: float, agreement: float, hits: int) -> float:
-    """Combine a rung's base confidence with context and uniqueness.
+def _score(base: float, agreement: float) -> float:
+    """Combine a rung's base confidence with how well the context survived.
 
-    The two adjustments answer different questions. Context agreement asks
-    whether the surroundings still look like the ones recorded -- a selector
-    that recorded no context scores 1 here, because absent evidence is not
-    evidence against. Ambiguity asks whether this rung could tell the location
-    apart from others at all; when it could not, no amount of agreeing context
-    makes the choice between the copies sound.
+    Context agreement asks whether the surroundings still look like the ones
+    recorded -- a selector that recorded no context scores 1 here, because absent
+    evidence is not evidence against. Whether the rung could tell this location
+    apart from the others it found is a separate question, answered afterwards by
+    :func:`_penalize_ambiguous`, once every candidate on the rung has been scored
+    and it is possible to see whether context put one of them in front.
     """
-    context = _CONTEXT_WEIGHT + (1 - _CONTEXT_WEIGHT) * agreement
-    return base * context * (_AMBIGUITY_PENALTY if hits > 1 else 1)
+    return base * (_CONTEXT_WEIGHT + (1 - _CONTEXT_WEIGHT) * agreement)
 
 
 def _context_agreement(

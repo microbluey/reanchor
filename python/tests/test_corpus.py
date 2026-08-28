@@ -21,7 +21,7 @@ CASES = build_corpus(DOCUMENTS)
 def test_covers_every_mutation_class_over_every_document() -> None:
     assert len(CASES) > 200
     assert {case.mutation for case in CASES} == {m.name for m in MUTATIONS}
-    assert len(MUTATIONS) == 11
+    assert len(MUTATIONS) == 12
 
 
 def test_meets_the_accuracy_floors() -> None:
@@ -47,9 +47,9 @@ def test_meets_the_accuracy_floors() -> None:
             mislocated += 1
 
     assert found / resolvable >= 0.97
-    assert exact / resolvable >= 0.95
+    assert exact / resolvable >= 0.97
     # The number that actually hurts users: a match pointing somewhere else.
-    assert mislocated / found <= 0.02
+    assert mislocated / found <= 0.01
     assert refused / deleted >= 0.9
 
 

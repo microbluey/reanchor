@@ -29,7 +29,11 @@ const document =
 
 // When the reader highlights something, record a selector.
 const selector = describeQuote(document, 71, 104);
-// → { exact: "every stored offset silently rots", prefix: "", suffix: "" }
+// → {
+//     exact: "every stored offset silently rots",
+//     prefix: " right, because ",
+//     suffix: " at the same con",
+//   }
 
 // Later. Someone rewrote the opening clause and swapped a word inside the
 // quote itself, so the stored offsets 71..104 now point two characters early
@@ -104,10 +108,17 @@ that window is *the* passage, and the difference is most of the work:
   `toSourceSpan` maps a normalized span back exactly. A collapsed run of
   whitespace maps to the whole run; a `…` that became `...` maps all three dots
   to the one source character.
-- **Context disambiguates, absence of context does not condemn.** A quote
-  occurring once needs no context and is not penalized for lacking it. A quote
-  occurring three times is penalized whatever its context says, because the
-  method could not tell the copies apart.
+- **Context disambiguates, and it is recorded even when nothing needs
+  disambiguating yet.** A quote unique today can stop being unique tomorrow —
+  the passage is revised and a verbatim copy of the old wording survives
+  elsewhere, so the only character-for-character match left is the stale copy.
+  Context is what tells them apart, so `describeQuote` always records some.
+  Context that was itself partly edited still counts, scored by longest common
+  affix rather than required to match.
+- **Ambiguity costs a candidate its own indistinguishability, not its
+  company.** A rung that found three copies but whose recorded context puts one
+  of them clearly in front has told them apart; only candidates tied at the top
+  of their rung — where the choice really is a coin flip — are penalized.
 - **Refusing is a feature.** `resolveQuote` returns `null` rather than the
   least-bad window. A mislocated citation is worse than a missing one: it looks
   verified.
@@ -116,26 +127,27 @@ that window is *the* passage, and the difference is most of the work:
 
 Anchoring needs no human labels. Take a document, record a selector, mutate the
 document by a transformation whose effect on the span you can compute — the
-ground truth is mechanical. `npm run bench` runs 237 such cases over four
+ground truth is mechanical. `npm run bench` runs 256 such cases over four
 documents (English prose, a technical text dense with identifiers, legal-style
 numbered clauses, and Chinese where whitespace carries no word boundaries):
 
 ```
 mutation                     n  recall   exact  overlap   wrong  refused   µs/case
 ----------------------------------------------------------------------------------
-edit-outside-span           24 100.0% 100.0%   0.0%   0.0%     —       323
-reflow-whitespace           24 100.0% 100.0%   0.0%   0.0%     —       297
-smarten-punctuation         17 100.0% 100.0%   0.0%   0.0%     —       319
-hyphenate-line-break        24 100.0% 100.0%   0.0%   0.0%     —       300
-copy-edit-inside-span       17 100.0% 100.0%   0.0%   0.0%     —       713
-delete-span                 24     —     —     —     —  95.8%       568
-duplicate-document          24 100.0% 100.0%   0.0%   0.0%     —       501
-relocate-span               24 100.0% 100.0%   0.0%   0.0%     —       265
-compound-retypeset          24 100.0% 100.0%   0.0%   0.0%     —       481
-heavy-rewrite               22  90.9%  77.3%   9.1%   5.0%     —       585
-ocr-noise                   13 100.0% 100.0%   0.0%   0.0%     —       569
+edit-outside-span           24 100.0% 100.0%   0.0%   0.0%     —       377
+reflow-whitespace           24 100.0% 100.0%   0.0%   0.0%     —       360
+smarten-punctuation         17 100.0% 100.0%   0.0%   0.0%     —       326
+hyphenate-line-break        24 100.0% 100.0%   0.0%   0.0%     —       340
+copy-edit-inside-span       17 100.0% 100.0%   0.0%   0.0%     —       833
+delete-span                 24     —     —     —     —  95.8%       650
+duplicate-document          24 100.0% 100.0%   0.0%   0.0%     —      1044
+relocate-span               24 100.0% 100.0%   0.0%   0.0%     —       661
+compound-retypeset          24 100.0% 100.0%   0.0%   0.0%     —       528
+heavy-rewrite               22  90.9%  81.8%   9.1%   0.0%     —       651
+decoy-survives-edit         19 100.0% 100.0%   0.0%   0.0%     —       741
+ocr-noise                   13 100.0% 100.0%   0.0%   0.0%     —       665
 ----------------------------------------------------------------------------------
-all                        237  99.1%  97.7%   0.9%   0.5%  95.8%       436
+all                        256  99.1%  98.3%   0.9%   0.0%  95.8%       593
 ```
 
 Three numbers, because they are not the same number. **recall** is how often the
@@ -149,7 +161,10 @@ trading correctness for recall fails CI.
 
 Reading the table: `heavy-rewrite` reverses the interior of a third of the words,
 which is roughly where a passage stops being the same passage — a match and a
-refusal are both defensible there, and the 5% mislocation is concentrated in it.
+refusal are both defensible there, and it accounts for all of the 0.9% overlap
+(a span found but not to the character). `decoy-survives-edit` is the hard case:
+the quoted passage is revised in place while an untouched verbatim copy survives
+elsewhere, so the exact text exists — just not where the annotation belongs.
 The one unrefused `delete-span` case is a legal document whose clauses repeat
 boilerplate almost verbatim; the deleted clause's near-twin is a defensible
 match by any threshold that admits real edits.
@@ -171,10 +186,11 @@ match by any threshold that admits real edits.
 
 ### `describeQuote(document, start, end, options?)`
 
-Builds a selector for `document[start..end)`. Grows context only as far as
-needed to make the selector unique — a distinctive sentence gets none, a
-repeated heading gets just enough. Fixed-length context is both too little to
-disambiguate and needlessly long to damage.
+Builds a selector for `document[start..end)`. Records `minContextLength`
+characters either side, then grows only as far as needed to make the selector
+unique — a repeated heading gets just enough. It never records none: a quote
+that is unique today can be revised tomorrow while a verbatim copy survives
+elsewhere, and context is the only evidence that tells the two apart.
 
 ### `resolveQuotes(document, selectors, options?)`
 
@@ -211,7 +227,7 @@ The same library, same algorithm, lives in [`python/`](python/) and on PyPI:
 pip install reanchor
 ```
 
-It is not a binding — it is a port, held to the same corpus. The 237 mutated
+It is not a binding — it is a port, held to the same corpus. The 256 mutated
 cases are verified byte-identical between the two implementations, and the
 accuracy columns of the two benchmark tables match case for case; only the
 timing column differs. Anchoring tends to straddle a language boundary, with the

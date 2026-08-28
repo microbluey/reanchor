@@ -6,12 +6,26 @@
  * dozen times, and a selector that matches all of them tells a later resolver
  * nothing. So context is captured either side.
  *
- * How much context? Fixed-length context is the common answer and it is
- * wrong in both directions: too little to disambiguate a repeated heading, and
- * needlessly long for a distinctive sentence — where the extra characters are
- * simply more surface area for a later edit to damage. `describeQuote` instead
- * grows the context until the selector identifies exactly one location, then
- * stops. Distinctive quotes get no context; repeated ones get just enough.
+ * How much context? Fixed-length context is the common answer and it is wrong in
+ * one direction: too little to disambiguate a repeated heading. So
+ * `describeQuote` grows the context until the selector identifies exactly one
+ * location, then stops — repeated passages get just enough.
+ *
+ * It stops growing, but it does not start at nothing. Recording no context for a
+ * quote that is unique today is a bet that it will still be unique when someone
+ * comes to resolve it, and that bet loses in a way worth naming: a passage is
+ * revised, a verbatim copy of the old wording survives elsewhere as a pull quote
+ * or a syndicated excerpt, and the only surviving character-for-character match
+ * is the copy. Reported against Hypothesis as
+ * [client#7571](https://github.com/hypothesis/client/issues/7571). Context is
+ * what tells the revised original from the stale copy, and a selector that
+ * recorded none has thrown that evidence away before the ambiguity existed.
+ *
+ * Context is not free — every recorded character is more surface for a later
+ * edit to damage — but the resolver scores context by longest common
+ * affix rather than requiring it to match, so partly-edited context degrades
+ * a candidate's confidence instead of disqualifying it. A floor therefore costs
+ * little and buys the case above.
  */
 
 import { findExact } from "./search.js";
@@ -20,7 +34,8 @@ import type { TextQuoteSelector } from "./resolve.js";
 
 export interface DescribeOptions {
   /**
-   * Context length to start from, doubling until the selector is unique.
+   * Context to record either side, always, and the length to start from when
+   * the quote repeats and the context has to grow.
    * @default 16
    */
   minContextLength?: number;
@@ -55,24 +70,25 @@ export function describeQuote(
   const minContextLength = options.minContextLength ?? 16;
   const maxContextLength = options.maxContextLength ?? 128;
 
-  if (exact.length === 0) {
-    return {
-      exact,
-      prefix: document.slice(Math.max(0, start - minContextLength), start),
-      suffix: document.slice(end, Math.min(document.length, end + minContextLength)),
-    };
-  }
+  const context = (length: number): TextQuoteSelector => ({
+    exact,
+    prefix: document.slice(Math.max(0, start - length), start),
+    suffix: document.slice(end, Math.min(document.length, end + length)),
+  });
+
+  if (exact.length === 0) return context(minContextLength);
 
   const occurrences = findExact(document, exact);
-  if (occurrences.length <= 1) return { exact, prefix: "", suffix: "" };
+  if (occurrences.length <= 1) return context(minContextLength);
 
   for (let length = minContextLength; ; length = Math.min(length * 2, maxContextLength)) {
-    const prefix = document.slice(Math.max(0, start - length), start);
-    const suffix = document.slice(end, Math.min(document.length, end + length));
+    const selector = context(length);
     const distinct = occurrences.every(
-      (at) => at === start || !contextMatches(document, at, at + exact.length, prefix, suffix),
+      (at) =>
+        at === start ||
+        !contextMatches(document, at, at + exact.length, selector.prefix as string, selector.suffix as string),
     );
-    if (distinct || length >= maxContextLength) return { exact, prefix, suffix };
+    if (distinct || length >= maxContextLength) return selector;
   }
 }
 

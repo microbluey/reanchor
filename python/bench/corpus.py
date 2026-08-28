@@ -361,6 +361,67 @@ def _heavy_rewrite(document: str, span: Span, rand: RandomFn) -> MutationResult 
     )
 
 
+_DECOY_SUBSTITUTIONS: Final[tuple[tuple[str, str], ...]] = (
+    (" the ", " this "),
+    (" is ", " was "),
+    (" a ", " one "),
+    (" and ", " plus "),
+    (" of ", " for "),
+)
+
+
+def _decoy_survives_edit(
+    document: str, span: Span, rand: RandomFn
+) -> MutationResult | None:
+    """Edit the span while an untouched copy of the original survives elsewhere.
+
+    This is the shape reported against Hypothesis as `client#7571
+    <https://github.com/hypothesis/client/issues/7571>`_: the passage is unique
+    when the selector is recorded, and only becomes ambiguous later, when an
+    editor revises it and a verbatim copy -- a pull quote, a syndicated excerpt,
+    a duplicated section -- remains untouched somewhere else.
+
+    The class separates "found the quote" from "found the passage that was
+    quoted". The surviving copy matches the selector's ``exact`` text character
+    for character, so a resolver that ranks any exact hit above everything else
+    answers with it confidently. The revised passage at the original location is
+    the right answer for the same reason ``copy-edit-inside-span`` says so: it is
+    the same sentence, copy-edited. The presence of a decoy elsewhere does not
+    make the copy-edited original less correct.
+
+    The revision is made as near the middle of the span as a substitution site
+    allows, and never at either end. An edit at the boundary would leave the
+    truth genuinely arguable -- align "...answered." against "...answered,
+    revised." and stopping before the inserted words is as defensible as covering
+    them -- and a corpus whose ground truth is a judgement call cannot measure
+    anything.
+
+    The edit is deterministic and consumes no randomness, so adding this class
+    leaves every other class's corpus byte-identical.
+    """
+    inside = document[span.start : span.end]
+    middle = len(inside) // 2
+    site = -1
+    chosen: tuple[str, str] | None = None
+    for substitution in _DECOY_SUBSTITUTIONS:
+        at = inside.find(substitution[0])
+        while at >= 0:
+            if site < 0 or abs(at - middle) < abs(site - middle):
+                site = at
+                chosen = substitution
+            at = inside.find(substitution[0], at + 1)
+    if chosen is None:
+        return None
+
+    edited = inside[:site] + chosen[1] + inside[site + len(chosen[0]) :]
+    revised = document[: span.start] + edited + document[span.end :]
+    return MutationResult(
+        # Appended after the span so the revised passage keeps its offsets.
+        document=f"{revised}\n\nPreviously reported: {inside}",
+        expected=Span(span.start, span.start + len(edited)),
+    )
+
+
 MUTATIONS: Final[tuple[Mutation, ...]] = (
     Mutation("edit-outside-span", _edit_outside_span),
     Mutation("reflow-whitespace", _reflow_whitespace),
@@ -373,6 +434,7 @@ MUTATIONS: Final[tuple[Mutation, ...]] = (
     Mutation("relocate-span", _relocate_span),
     Mutation("compound-retypeset", _compound_retypeset),
     Mutation("heavy-rewrite", _heavy_rewrite),
+    Mutation("decoy-survives-edit", _decoy_survives_edit),
 )
 
 

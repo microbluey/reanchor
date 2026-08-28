@@ -231,11 +231,29 @@ def test_resolves_many_quotes_in_one_pass() -> None:
     assert [result is not None for result in results] == [True, False, True]
 
 
-def test_describe_captures_no_context_for_a_distinctive_quote() -> None:
+def test_describe_records_context_even_for_a_quote_unique_today() -> None:
     selector = describe_quote(ARTICLE, 2, 18)
     assert selector.exact == "Robust anchoring"
-    assert selector.prefix == ""
-    assert selector.suffix == ""
+    # Uniqueness at capture time does not survive editing, so the evidence that
+    # would tell a revised passage from a stale verbatim copy is kept anyway.
+    assert selector.suffix != ""
+
+
+def test_describe_prefers_a_revised_passage_over_a_stale_verbatim_copy() -> None:
+    # hypothesis/client#7571: the quote is unique when recorded, an editor later
+    # revises it, and an untouched copy survives elsewhere as a pull quote.
+    quoted = "it describes the passage rather than its coordinates"
+    at = ARTICLE.index(quoted)
+    selector = describe_quote(ARTICLE, at, at + len(quoted))
+
+    revised = "it describes this passage rather than its coordinates"
+    edited = ARTICLE[:at] + revised + ARTICLE[at + len(quoted) :]
+    with_decoy = f"{edited}\n\nPreviously published: {quoted}"
+
+    resolved = resolve_quote(with_decoy, selector)
+    assert resolved is not None
+    assert resolved.start == at
+    assert resolved.text == revised
 
 
 def test_describe_grows_context_until_a_repeated_quote_is_unique() -> None:

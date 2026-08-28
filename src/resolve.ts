@@ -136,8 +136,11 @@ const METHOD_CONFIDENCE: Record<MatchMethod, number> = {
   approximate: 0.95,
 };
 
-/** Applied when a rung matched more than one location. */
+/** Applied to a candidate its own rung could not single out — see `penalizeAmbiguous`. */
 const AMBIGUITY_PENALTY = 0.8;
+
+/** Confidences within this distance count as tied, so neither wins on rounding. */
+const TIE_EPSILON = 1e-9;
 
 /**
  * Floor of the context factor: a match whose recorded context is entirely
@@ -174,22 +177,91 @@ export function resolveQuote(
   const candidates: Candidate[] = [];
   for (let rung = 0; rung <= limit; rung++) {
     const method = METHOD_ORDER[rung] as MatchMethod;
-    candidates.push(...attempt(method, prepared, selector, prefix, suffix, options));
-    if (candidates.length > 0) break;
+    candidates.push(
+      ...penalizeAmbiguous(attempt(method, prepared, selector, prefix, suffix, options)),
+    );
+    if (candidates.length > 0 && !canBeBeaten(candidates, rung, limit)) break;
   }
   if (candidates.length === 0) return null;
 
-  candidates.sort((a, b) => b.confidence - a.confidence || a.start - b.start);
-  const best = candidates[0] as Candidate;
+  // One location can be reached by several rungs — the exact rung and the
+  // normalized rung find the same span whenever normalization changed nothing
+  // relevant. Keep each location once, at its best score, so that a span cannot
+  // appear as a rival to itself.
+  const byLocation = new Map<string, Candidate>();
+  for (const candidate of candidates) {
+    const key = `${candidate.start}:${candidate.end}`;
+    const seen = byLocation.get(key);
+    if (seen === undefined || candidate.confidence > seen.confidence) byLocation.set(key, candidate);
+  }
+  const distinct = [...byLocation.values()];
+
+  distinct.sort((a, b) => b.confidence - a.confidence || a.start - b.start);
+  const best = distinct[0] as Candidate;
   if (best.confidence < minConfidence) return null;
 
-  const rivals = candidates
+  const rivals = distinct
     .slice(1)
     .filter((candidate) => candidate.confidence >= minConfidence && candidate.confidence >= best.confidence - 0.05)
     .slice(0, maxRivals)
     .map((candidate) => materialize(candidate, prepared.text));
 
   return { ...materialize(best, prepared.text), rivals };
+}
+
+/**
+ * Whether a rung below `rung` could still produce a better answer than what has
+ * been found so far.
+ *
+ * The ladder is ordered by trustworthiness, so the obvious implementation stops
+ * at the first rung that yields anything. That is wrong when the quote survives
+ * verbatim somewhere it does not belong: a decoy found by the exact rung whose
+ * surroundings bear no resemblance to the recorded context scores *below* what
+ * the approximate rung can award the copy-edited original, whose surroundings
+ * still match. Stopping early means those two candidates are never compared.
+ *
+ * So descend while the best score so far is under the ceiling a lower rung could
+ * reach — its base confidence, since similarity, context agreement and the
+ * ambiguity penalty can only reduce it. A match with fully agreeing context
+ * scores its rung's base confidence, which is at or above every lower rung's
+ * ceiling, so the unambiguous case still stops at the first rung and costs
+ * nothing.
+ */
+function canBeBeaten(candidates: readonly Candidate[], rung: number, limit: number): boolean {
+  let ceiling = 0;
+  for (let next = rung + 1; next <= limit; next++) {
+    ceiling = Math.max(ceiling, METHOD_CONFIDENCE[METHOD_ORDER[next] as MatchMethod]);
+  }
+  let best = 0;
+  for (const candidate of candidates) best = Math.max(best, candidate.confidence);
+  return best < ceiling;
+}
+
+/**
+ * Discount candidates that their own rung could not single out.
+ *
+ * Counting hits is the tempting test, and it is the wrong one: a rung that found
+ * three locations but whose recorded context matches exactly one of them *has*
+ * told them apart, and penalizing the survivor for the company it kept lets a
+ * worse rung's unambiguous-but-wrong answer outrank it. What ambiguity should
+ * cost is being indistinguishable, so the penalty falls on candidates tied at the
+ * top of their rung — where the resolver is genuinely choosing by coin flip —
+ * and a candidate that context put in front on its own keeps its score.
+ *
+ * A single hit is trivially in front and so passes through unchanged, which is
+ * why this is not a behaviour change for the common case.
+ */
+function penalizeAmbiguous(candidates: readonly Candidate[]): Candidate[] {
+  if (candidates.length <= 1) return [...candidates];
+  let best = 0;
+  for (const candidate of candidates) best = Math.max(best, candidate.confidence);
+  const tied = candidates.filter((candidate) => candidate.confidence >= best - TIE_EPSILON).length;
+  if (tied <= 1) return [...candidates];
+  return candidates.map((candidate) =>
+    candidate.confidence >= best - TIE_EPSILON
+      ? { ...candidate, confidence: candidate.confidence * AMBIGUITY_PENALTY }
+      : candidate,
+  );
 }
 
 /**
@@ -244,7 +316,6 @@ function attempt(
         confidence: score(
           METHOD_CONFIDENCE[method],
           contextAgreement(prepared.text, at, at + selector.exact.length, prefix, suffix),
-          hits.length,
         ),
         distance: 0,
       }));
@@ -276,7 +347,7 @@ function attempt(
           start: span.start,
           end: span.end,
           method,
-          confidence: score(METHOD_CONFIDENCE[method], agreement, hits.length),
+          confidence: score(METHOD_CONFIDENCE[method], agreement),
           distance: 0,
         };
       });
@@ -297,7 +368,7 @@ function attempt(
           start: span.start,
           end: span.end,
           method,
-          confidence: score(METHOD_CONFIDENCE[method] * similarity, agreement, matches.length),
+          confidence: score(METHOD_CONFIDENCE[method] * similarity, agreement),
           distance: match.distance,
         };
       });
@@ -306,19 +377,17 @@ function attempt(
 }
 
 /**
- * Combine a rung's base confidence with how well the context survived and
- * whether the location was unique.
+ * Combine a rung's base confidence with how well the context survived.
  *
- * The two adjustments answer different questions. Context agreement asks
- * whether the surroundings still look like the ones recorded — a selector that
- * recorded no context scores 1 here, because absent evidence is not evidence
- * against. Ambiguity asks whether this rung could tell the location apart from
- * others at all; when it could not, no amount of agreeing context makes the
- * choice between the copies sound.
+ * Context agreement asks whether the surroundings still look like the ones
+ * recorded — a selector that recorded no context scores 1 here, because absent
+ * evidence is not evidence against. Whether the rung could tell this location
+ * apart from the others it found is a separate question, answered afterwards by
+ * `penalizeAmbiguous`, once every candidate on the rung has been scored and it
+ * is possible to see whether context put one of them in front.
  */
-function score(base: number, agreement: number, hits: number): number {
-  const context = CONTEXT_WEIGHT + (1 - CONTEXT_WEIGHT) * agreement;
-  return base * context * (hits > 1 ? AMBIGUITY_PENALTY : 1);
+function score(base: number, agreement: number): number {
+  return base * (CONTEXT_WEIGHT + (1 - CONTEXT_WEIGHT) * agreement);
 }
 
 /**

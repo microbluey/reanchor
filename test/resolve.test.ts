@@ -184,11 +184,28 @@ describe("resolveQuote", () => {
 });
 
 describe("describeQuote", () => {
-  it("captures no context for a distinctive quote", () => {
+  it("records context even for a quote that is unique today", () => {
     const selector = describeQuote(ARTICLE, 2, 18);
     expect(selector.exact).toBe("Robust anchoring");
-    expect(selector.prefix).toBe("");
-    expect(selector.suffix).toBe("");
+    // Uniqueness at capture time does not survive editing, so the evidence that
+    // would tell a revised passage from a stale verbatim copy is kept anyway.
+    expect(selector.suffix).not.toBe("");
+  });
+
+  it("prefers a revised passage over a stale verbatim copy of it", () => {
+    // hypothesis/client#7571: the quote is unique when recorded, an editor later
+    // revises it, and an untouched copy survives elsewhere as a pull quote.
+    const at = ARTICLE.indexOf("it describes the passage rather than its coordinates");
+    const quoted = "it describes the passage rather than its coordinates";
+    const selector = describeQuote(ARTICLE, at, at + quoted.length);
+
+    const revised = "it describes this passage rather than its coordinates";
+    const edited = `${ARTICLE.slice(0, at)}${revised}${ARTICLE.slice(at + quoted.length)}`;
+    const withDecoy = `${edited}\n\nPreviously published: ${quoted}`;
+
+    const resolved = resolveQuote(withDecoy, selector);
+    expect(resolved?.start).toBe(at);
+    expect(resolved?.text).toBe(revised);
   });
 
   it("grows context until a repeated quote is unique", () => {

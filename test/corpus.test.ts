@@ -19,7 +19,7 @@ describe("corpus", () => {
   it("covers every mutation class over every document", () => {
     expect(cases.length).toBeGreaterThan(200);
     const mutations = new Set(cases.map((testCase) => testCase.mutation));
-    expect(mutations.size).toBe(11);
+    expect(mutations.size).toBe(12);
   });
 
   it("meets the accuracy floors", () => {
@@ -51,9 +51,9 @@ describe("corpus", () => {
     }
 
     expect(found / resolvable).toBeGreaterThanOrEqual(0.97);
-    expect(exact / resolvable).toBeGreaterThanOrEqual(0.95);
+    expect(exact / resolvable).toBeGreaterThanOrEqual(0.97);
     // The number that actually hurts users: a match pointing somewhere else.
-    expect(mislocated / found).toBeLessThanOrEqual(0.02);
+    expect(mislocated / found).toBeLessThanOrEqual(0.01);
     expect(refused / deleted).toBeGreaterThanOrEqual(0.9);
   });
 

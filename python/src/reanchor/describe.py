@@ -6,11 +6,25 @@ times, and a selector that matches all of them tells a later resolver nothing.
 So context is captured either side.
 
 How much context? Fixed-length context is the common answer and it is wrong in
-both directions: too little to disambiguate a repeated heading, and needlessly
-long for a distinctive sentence -- where the extra characters are simply more
-surface area for a later edit to damage. :func:`describe_quote` instead grows
-the context until the selector identifies exactly one location, then stops.
-Distinctive quotes get no context; repeated ones get just enough.
+one direction: too little to disambiguate a repeated heading. So
+:func:`describe_quote` grows the context until the selector identifies exactly
+one location, then stops -- repeated passages get just enough.
+
+It stops growing, but it does not start at nothing. Recording no context for a
+quote that is unique today is a bet that it will still be unique when someone
+comes to resolve it, and that bet loses in a way worth naming: a passage is
+revised, a verbatim copy of the old wording survives elsewhere as a pull quote
+or a syndicated excerpt, and the only surviving character-for-character match is
+the copy. Reported against Hypothesis as
+`client#7571 <https://github.com/hypothesis/client/issues/7571>`_. Context is
+what tells the revised original from the stale copy, and a selector that
+recorded none has thrown that evidence away before the ambiguity existed.
+
+Context is not free -- every recorded character is more surface for a later edit
+to damage -- but the resolver scores context by longest common affix rather than
+requiring it to match, so partly-edited context degrades a candidate's confidence
+instead of disqualifying it. A floor therefore costs little and buys the case
+above.
 """
 
 from __future__ import annotations
@@ -28,7 +42,8 @@ __all__ = ["DescribeOptions", "describe_quote"]
 class DescribeOptions:
     """How far :func:`describe_quote` may grow the recorded context."""
 
-    #: Context length to start from, doubling until the selector is unique.
+    #: Context to record either side, always, and the length to start from when
+    #: the quote repeats and the context has to grow.
     min_context_length: int = 16
     #: Stop growing here even if the quote is still ambiguous -- some documents
     #: genuinely repeat a passage verbatim, and unbounded growth would capture
@@ -61,28 +76,32 @@ def describe_quote(
 
     exact = document[start:end]
 
-    if not exact:
+    def context(length: int) -> TextQuoteSelector:
         return TextQuoteSelector(
             exact=exact,
-            prefix=document[max(0, start - options.min_context_length) : start],
-            suffix=document[end : end + options.min_context_length],
+            prefix=document[max(0, start - length) : start],
+            suffix=document[end : end + length],
         )
+
+    if not exact:
+        return context(options.min_context_length)
 
     occurrences = find_exact(document, exact)
     if len(occurrences) <= 1:
-        return TextQuoteSelector(exact=exact, prefix="", suffix="")
+        return context(options.min_context_length)
 
     length = options.min_context_length
     while True:
-        prefix = document[max(0, start - length) : start]
-        suffix = document[end : end + length]
+        selector = context(length)
         distinct = all(
             at == start
-            or not _context_matches(document, at, at + len(exact), prefix, suffix)
+            or not _context_matches(
+                document, at, at + len(exact), selector.prefix, selector.suffix
+            )
             for at in occurrences
         )
         if distinct or length >= options.max_context_length:
-            return TextQuoteSelector(exact=exact, prefix=prefix, suffix=suffix)
+            return selector
         length = min(length * 2, options.max_context_length)
 
 
