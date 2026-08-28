@@ -13,6 +13,8 @@ cannot tell.
     'approximate'
 """
 
+from importlib import metadata as _metadata
+
 from .describe import DescribeOptions, describe_quote
 from .normalize import (
     NormalizedText,
@@ -40,7 +42,16 @@ from .search import (
     find_exact,
 )
 
-__version__ = "0.1.0"
+# Read from the installed distribution rather than written here, because a
+# literal drifts silently: this said "0.1.0" in the 0.2.0 and 0.3.0 wheels. The
+# version lives in `pyproject.toml`, which the release workflow already checks
+# against the tag, so metadata is the copy that cannot disagree with the tag.
+# A source tree that was never installed has no metadata; say so rather than
+# guess a number.
+try:
+    __version__ = _metadata.version("reanchor")
+except _metadata.PackageNotFoundError:  # pragma: no cover - not an installed dist
+    __version__ = "0+unknown"
 
 __all__ = [
     "ApproximateMatch",

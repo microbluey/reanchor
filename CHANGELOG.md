@@ -12,6 +12,17 @@ that moves a passage from found to refused — or from one location to another �
 is a breaking change even when no type changes. Such changes will name the
 benchmark columns they move.
 
+## [Unreleased]
+
+### Fixed
+
+- `reanchor.__version__` in the Python package reported `0.1.0` from the 0.2.0
+  and 0.3.0 releases. It was a hand-written literal that nothing bumped and
+  nothing checked; it now reads distribution metadata, so it is the version
+  `pyproject.toml` declares — which the release workflow already checks against
+  the tag. A test asserts the two agree. No behaviour depends on this value; a
+  caller that logged it logged the wrong number.
+
 ## [0.3.0] — 2026-08-28
 
 A second entry point, `reanchor/dom`, for callers who have a page rather than a
