@@ -12,6 +12,22 @@ that moves a passage from found to refused — or from one location to another �
 is a breaking change even when no type changes. Such changes will name the
 benchmark columns they move.
 
+## [0.1.1] — 2026-08-28
+
+No changes to either library. This release exists so that every published
+artifact is traceable to a commit: npm's `0.1.0` was published by hand, because
+npm will not configure a trusted publisher for a package that does not yet
+exist, so it carries no provenance attestation. `0.1.1` is the first npm
+artifact published by the release workflow via OIDC. PyPI's `0.1.0` already had
+one and is unaffected.
+
+### Fixed
+
+- The npm publish job pinned Node 22, whose bundled npm 10.9 predates trusted
+  publishing; the pin also made upgrading npm in place unsatisfiable. The job now
+  takes the Node 24 line and fails early with a version check rather than on an
+  opaque auth error.
+
 ## [0.1.0] — 2026-08-27
 
 First release. TypeScript on npm, Python on PyPI, same algorithm and same
@@ -42,4 +58,5 @@ Measured at release: 99.1% recall, 97.7% exact spans, 0.5% mislocated, 95.8% of
 deleted passages correctly refused — identical in both implementations, over a
 corpus verified byte-identical between them.
 
+[0.1.1]: https://github.com/microbluey/reanchor/releases/tag/v0.1.1
 [0.1.0]: https://github.com/microbluey/reanchor/releases/tag/v0.1.0
